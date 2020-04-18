@@ -28,6 +28,21 @@ int livepatch_nop(struct expr_func *f, vec_expr_t args, void *c)
     return 0;
 }
 
+noinline int livepatch_fib(struct expr_func *f, vec_expr_t args, void *c)
+{
+    int k = expr_eval(&vec_nth(&args, 0)) >> 4;
+    long long fib[k + 2];
+
+    fib[0] = 0;
+    fib[1] = 1;
+
+    for (int i = 2; i <= k; i++) {
+        fib[i] = fib[i - 1] + fib[i - 2];
+    }
+
+    return (fib[k] << 4);
+}
+
 /* clang-format off */
 static struct klp_func funcs[] = {
     {
@@ -37,6 +52,10 @@ static struct klp_func funcs[] = {
     {
         .old_name = "user_func_nop_cleanup",
         .new_func = livepatch_nop_cleanup,
+    },
+    {
+        .old_name = "user_func_fib",
+        .new_func = livepatch_fib,
     },
     {},
 };
