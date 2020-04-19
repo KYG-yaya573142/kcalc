@@ -53,19 +53,22 @@ static int FP2INT(int n, int d)
 
 noinline int livepatch_fib(struct expr_func *f, vec_expr_t args, void *c)
 {
+    if (args.len != 1) {
+        pr_err("fib(): too many or no argument\n");
+        return -1;
+    }
     int n = expr_eval(&vec_nth(&args, 0)); /* fixed-point */
     int frac = GET_FRAC(n);                /* frac */
     n >>= 4;                               /* mantissa */
 
-    while (frac) { /* fixed-point -> interger */
-        if (frac > 0) {
+    /* fixed-point -> interger */
+    if (frac > 0) {
+        for (; frac; frac--)
             n *= 10;
-            --frac;
-        }
-        if (frac < 0) {
+    }
+    if (frac < 0) {
+        for (; frac; frac++)
             n /= 10;
-            ++frac;
-        }
     }
 
     if (n < 2) { /* F(0) = 0, F(1) = 1 */
