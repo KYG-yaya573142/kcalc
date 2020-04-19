@@ -28,19 +28,66 @@ int livepatch_nop(struct expr_func *f, vec_expr_t args, void *c)
     return 0;
 }
 
-noinline int livepatch_fib(struct expr_func *f, vec_expr_t args, void *c)
+static int GET_FRAC(int n)
 {
-    int k = expr_eval(&vec_nth(&args, 0)) >> 4;
-    long long fib[k + 2];
+    int x = n & 15;
+    if (x & 8)
+        return -(((~x) & 15) + 1);
 
-    fib[0] = 0;
-    fib[1] = 1;
+    return x;
+}
 
-    for (int i = 2; i <= k; i++) {
-        fib[i] = fib[i - 1] + fib[i - 2];
+static int FP2INT(int n, int d)
+{
+    while (n && n % 10 == 0) {
+        ++d;
+        n /= 10;
+    }
+    if (d == -1) {
+        n *= 10;
+        --d;
     }
 
-    return (fib[k] << 4);
+    return ((n << 4) | (d & 15));
+}
+
+noinline int livepatch_fib(struct expr_func *f, vec_expr_t args, void *c)
+{
+    int n = expr_eval(&vec_nth(&args, 0)); /* fixed-point */
+    int frac = GET_FRAC(n);                /* frac */
+    n >>= 4;                               /* mantissa */
+
+    while (frac) { /* fixed-point -> interger */
+        if (frac > 0) {
+            n *= 10;
+            --frac;
+        }
+        if (frac < 0) {
+            n /= 10;
+            ++frac;
+        }
+    }
+
+    if (n < 2) { /* F(0) = 0, F(1) = 1 */
+        return (n << 4);
+    }
+    long long fib[2];
+    unsigned int ndigit = 32 - __builtin_clz(n);
+    fib[0] = 0; /* F(k) */
+    fib[1] = 1; /* F(k+1) */
+    /* fast doubling algorithm */
+    for (unsigned int i = 1U << (ndigit - 1); i; i >>= 1) {
+        long long k1 = fib[0] * (fib[1] * 2 - fib[0]);
+        long long k2 = fib[0] * fib[0] + fib[1] * fib[1];
+        if (n & i) {
+            fib[0] = k2;
+            fib[1] = k1 + k2;
+        } else {
+            fib[0] = k1;
+            fib[1] = k2;
+        }
+    }
+    return FP2INT(fib[0], 0);
 }
 
 /* clang-format off */
